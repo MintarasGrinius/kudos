@@ -1,14 +1,38 @@
-// app/routes/login.tsx
 import { useState } from 'react'
 import { Layout } from '~/components/layout'
 import { FormField } from '~/components/form-field'
+import {
+  validateEmail,
+  validateName,
+  validatePassword,
+} from '~/utils/validators.server'
+import type { ActionFunction, LoaderFunction } from '@remix-run/node'
+import { json, redirect } from '@remix-run/node'
+import { login, register, getUser } from '~/utils/auth.server'
+import { useActionData } from '@remix-run/react'
+import { useRef, useEffect } from 'react'
+
+export const loader: LoaderFunction = async ({ request }) => {
+  // If there's already a user in the session, redirect to the home page
+  return (await getUser(request)) ? redirect('/') : null
+}
 
 export default function Login() {
   const [action, setAction] = useState('login')
+  const actionData = useActionData()
   const [formData, setFormData] = useState({
+    email: actionData?.fields?.email || '',
+    password: actionData?.fields?.password || '',
+    firstName: actionData?.fields?.lastName || '',
+    lastName: actionData?.fields?.firstName || '',
+  })
+
+  const newState = {
     email: '',
     password: '',
-  })
+    firstName: '',
+    lastName: '',
+  }
 
   // Updates the form data when an input changes
   const handleInputChange = (
@@ -37,11 +61,16 @@ export default function Login() {
         </p>
 
         <form method='POST' className='rounded-2xl bg-gray-200 p-6 w-96'>
+          <div className='text-xs font-semibold text-center tracking-wide text-red-500 w-full'>
+            {actionData?.error}
+          </div>
+
           <FormField
             htmlFor='email'
             label='Email'
             value={formData.email}
             onChange={(e) => handleInputChange(e, 'email')}
+            error={actionData?.errors?.email}
           />
           <FormField
             htmlFor='password'
@@ -49,7 +78,26 @@ export default function Login() {
             label='Password'
             value={formData.password}
             onChange={(e) => handleInputChange(e, 'password')}
+            error={actionData?.errors?.password}
           />
+          {action === 'register' && (
+            <>
+              <FormField
+                htmlFor='firstName'
+                label='First Name'
+                onChange={(e) => handleInputChange(e, 'firstName')}
+                value={formData.firstName}
+                error={actionData?.errors?.firstName}
+              />
+              <FormField
+                htmlFor='lastName'
+                label='Last Name'
+                onChange={(e) => handleInputChange(e, 'lastName')}
+                value={formData.lastName}
+                error={actionData?.errors?.lastName}
+              />
+            </>
+          )}
           <div className='w-full text-center'>
             <button
               type='submit'
@@ -65,4 +113,61 @@ export default function Login() {
     </Layout>
   )
 }
-//Add toggleable fields
+
+export const action: ActionFunction = async ({ request }) => {
+  const form = await request.formData()
+  const action = form.get('_action')
+  const email = form.get('email')
+  const password = form.get('password')
+  let firstName = form.get('firstName')
+  let lastName = form.get('lastName')
+  console.log(action)
+  if (
+    typeof action !== 'string' ||
+    typeof email !== 'string' ||
+    typeof password !== 'string'
+  ) {
+    return json({ error: `Invalid Form Data`, form: action }, { status: 400 })
+  }
+
+  if (
+    action === 'register' &&
+    (typeof firstName !== 'string' || typeof lastName !== 'string')
+  ) {
+    return json({ error: `Invalid Form Data`, form: action }, { status: 400 })
+  }
+
+  const errors = {
+    email: validateEmail(email),
+    password: validatePassword(password),
+    ...(action === 'register'
+      ? {
+          firstName: validateName((firstName as string) || ''),
+          lastName: validateName((lastName as string) || ''),
+        }
+      : {}),
+  }
+
+  if (Object.values(errors).some(Boolean))
+    return json(
+      {
+        errors,
+        fields: { email, password, firstName, lastName },
+        form: action,
+      },
+      { status: 400 }
+    )
+
+  switch (action) {
+    case 'login': {
+      return await login({ email, password })
+    }
+    case 'register': {
+      firstName = firstName as string
+      lastName = lastName as string
+      return await register({ email, password, firstName, lastName })
+    }
+    default:
+      return json({ error: `Invalid Form Data` }, { status: 400 })
+  }
+}
