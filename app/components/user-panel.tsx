@@ -33,5 +33,3 @@ export function UserPanel({ users }: { users: User[] }) {
     </div>
   )
 }
-
-//In app/components create a new file named portal.tsx with the following contents:
