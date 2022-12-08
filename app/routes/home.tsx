@@ -5,10 +5,11 @@ import { Layout } from '~/components/layout'
 import { UserPanel } from '~/components/user-panel'
 import { getOtherUsers } from '~/utils/user.server'
 import { useLoaderData, Outlet } from '@remix-run/react'
-import { getFilteredKudos } from '~/utils/kudos.server'
+import { getFilteredKudos, getRecentKudos } from '~/utils/kudos.server'
 import { Kudo } from '~/components/kudo'
 import type { Kudo as IKudo, Profile, Prisma } from '@prisma/client'
 import { SearchBar } from '~/components/search-bar'
+import { RecentBar } from '~/components/recent-bar'
 
 interface KudoWithProfile extends IKudo {
   author: {
@@ -22,6 +23,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url)
   const sort = url.searchParams.get('sort')
   const filter = url.searchParams.get('filter')
+  const recentKudos = await getRecentKudos()
 
   let sortOptions: Prisma.KudoOrderByWithRelationInput = {}
   if (sort) {
@@ -62,11 +64,11 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   const kudos = await getFilteredKudos(userId, sortOptions, textFilter)
-  return json({ users, kudos })
+  return json({ users, kudos, recentKudos })
 }
 
 export default function Home() {
-  const { users, kudos } = useLoaderData()
+  const { users, kudos, recentKudos } = useLoaderData()
 
   return (
     <Layout>
@@ -83,6 +85,7 @@ export default function Home() {
               ))}
             </div>
             {/* Recent Kudos Goes Here */}
+            <RecentBar kudos={recentKudos} />
           </div>
         </div>
       </div>
